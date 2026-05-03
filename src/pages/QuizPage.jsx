@@ -1,544 +1,489 @@
-// src/pages/QuizPage.jsx
-import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+// src/pages/HomePage.jsx
+import { useState, useEffect } from "react"
+import { Link, useNavigate } from "react-router-dom"
 
-export default function QuizPage() {
-  const navigate = useNavigate();
-  
-  // ✅ Sample Quiz Data (Backend se replace karna)
-  const quizData = {
-    id: 1,
-    title: "Science Basics Quiz",
-    category: "science",
-    timeLimit: 300, // 5 minutes in seconds
-    questions: [
-      {
-        id: 1,
-        question: "What is the chemical symbol for water?",
-        options: ["H2O", "CO2", "NaCl", "O2"],
-        correctAnswer: 0,
-        explanation: "H2O represents two hydrogen atoms and one oxygen atom."
-      },
-      {
-        id: 2,
-        question: "Which planet is known as the Red Planet?",
-        options: ["Venus", "Mars", "Jupiter", "Saturn"],
-        correctAnswer: 1,
-        explanation: "Mars appears red due to iron oxide on its surface."
-      },
-      {
-        id: 3,
-        question: "What is the powerhouse of the cell?",
-        options: ["Nucleus", "Ribosome", "Mitochondria", "Cytoplasm"],
-        correctAnswer: 2,
-        explanation: "Mitochondria produce ATP, the energy currency of cells."
-      },
-      {
-        id: 4,
-        question: "What is the speed of light in vacuum?",
-        options: ["3×10⁶ m/s", "3×10⁸ m/s", "3×10¹⁰ m/s", "3×10⁴ m/s"],
-        correctAnswer: 1,
-        explanation: "Light travels at approximately 299,792,458 m/s in vacuum."
-      },
-      {
-        id: 5,
-        question: "Which gas do plants absorb during photosynthesis?",
-        options: ["Oxygen", "Nitrogen", "Carbon Dioxide", "Hydrogen"],
-        correctAnswer: 2,
-        explanation: "Plants absorb CO2 and release oxygen during photosynthesis."
-      }
-    ]
-  };
+export default function HomePage() {
+  const navigate = useNavigate()
+  const [quizzes, setQuizzes] = useState([])
+  const [filteredQuizzes, setFilteredQuizzes] = useState([])
+  const [selectedSubject, setSelectedSubject] = useState("all")
+  const [searchQuery, setSearchQuery] = useState("")
+  const [loading, setLoading] = useState(true)
+  const [user, setUser] = useState(null)
 
-  // ✅ State Management
-  const [currentQuestion, setCurrentQuestion] = useState(0);
-  const [answers, setAnswers] = useState({});
-  const [timeLeft, setTimeLeft] = useState(quizData.timeLimit);
-  const [submitted, setSubmitted] = useState(false);
-  const [score, setScore] = useState(null);
+  // ✅ Subject options with icons
+  const subjects = [
+    { value: "all", label: "🎯 All Quizzes", color: "#6366f1" },
+    { value: "os", label: "💻 Operating System", color: "#3b82f6" },
+    { value: "python", label: "🐍 Python", color: "#fbbf24" },
+    { value: "networks", label: "🌐 Computer Networks", color: "#10b981" },
+    { value: "dsa", label: "📊 Data Structures", color: "#8b5cf6" },
+    { value: "fullstack", label: "⚡ Full Stack", color: "#ec4899" },
+    { value: "mixed", label: "🔀 Mixed Practice", color: "#f97316" }
+  ]
 
-  // ✅ Timer Logic
+  // ✅ Check login status & load quizzes
   useEffect(() => {
-    if (submitted || timeLeft <= 0) return;
-    const timer = setInterval(() => {
-      setTimeLeft((prev) => {
-        if (prev <= 1) {
-          handleSubmit();
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-    return () => clearInterval(timer);
-  }, [submitted, timeLeft]);
+    // Check if user is logged in
+    const storedUser = localStorage.getItem("user")
+    if (storedUser) {
+      setUser(JSON.parse(storedUser))
+    }
 
-  // ✅ Handle Answer Selection
-  const handleAnswer = (questionId, optionIndex) => {
-    setAnswers((prev) => ({ ...prev, [questionId]: optionIndex }));
-  };
+    // Load quizzes from localStorage OR backend API
+    loadQuizzes()
+  }, [])
 
-  // ✅ Calculate Score & Submit
-  const handleSubmit = () => {
-    let correctCount = 0;
-    quizData.questions.forEach((q) => {
-      if (answers[q.id] === q.correctAnswer) {
-        correctCount++;
+  // ✅ Filter quizzes when subject or search changes
+  useEffect(() => {
+    let result = [...quizzes]
+    
+    // Filter by subject
+    if (selectedSubject !== "all") {
+      result = result.filter(q => q.subject === selectedSubject)
+    }
+    
+    // Filter by search query
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase()
+      result = result.filter(q => 
+        q.title.toLowerCase().includes(query) || 
+        q.description?.toLowerCase().includes(query)
+      )
+    }
+    
+    // Only show active quizzes on homepage
+    result = result.filter(q => q.status === "active")
+    
+    setFilteredQuizzes(result)
+  }, [quizzes, selectedSubject, searchQuery])
+
+  // ✅ Load quizzes from localStorage or backend
+  const loadQuizzes = async () => {
+    try {
+      setLoading(true)
+      
+      // 🔹 Try backend API first (if available)
+      const API_URL = getApiUrl()
+      const response = await fetch(`${API_URL}/quizzes`)
+      
+      if (response.ok) {
+        const data = await response.json()
+        setQuizzes(data.quizzes || data.data || [])
+        console.log('✅ Quizzes loaded from backend')
+      } else {
+        // 🔹 Fallback to localStorage
+        loadFromLocalStorage()
       }
-    });
-    const finalScore = Math.round((correctCount / quizData.questions.length) * 100);
-    setScore({
-      correct: correctCount,
-      total: quizData.questions.length,
-      percentage: finalScore,
-      answers: answers
-    });
-    setSubmitted(true);
-  };
-
-  // ✅ Format Time Display
-  const formatTime = (seconds) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins}:${secs.toString().padStart(2, "0")}`;
-  };
-
-  // ✅ Result Screen (After Submission)
-  if (submitted && score) {
-    return (
-      <div style={styles.container}>
-        <div style={styles.resultCard}>
-          <h1 style={styles.resultTitle}>🎉 Quiz Completed!</h1>
-          <div style={styles.scoreDisplay}>
-            <span style={styles.scoreValue}>{score.percentage}%</span>
-            <span style={styles.scoreText}>
-              {score.correct}/{score.total} Correct
-            </span>
-          </div>
-          
-          {/* Answer Review */}
-          <div style={styles.reviewSection}>
-            <h3 style={styles.reviewTitle}>📋 Answer Review</h3>
-            {quizData.questions.map((q, index) => {
-              const userAns = answers[q.id];
-              const isCorrect = userAns === q.correctAnswer;
-              return (
-                <div key={q.id} style={{
-                  ...styles.reviewItem,
-                  borderLeft: `4px solid ${isCorrect ? "#10b981" : "#ef4444"}`
-                }}>
-                  <p style={styles.reviewQuestion}>
-                    <strong>Q{index + 1}:</strong> {q.question}
-                  </p>
-                  <p style={styles.reviewAnswer}>
-                    Your answer:{" "}
-                    <span style={{ color: isCorrect ? "#10b981" : "#ef4444", fontWeight: "600" }}>
-                      {q.options[userAns] || "Not answered"}
-                    </span>
-                  </p>
-                  {!isCorrect && (
-                    <p style={styles.reviewCorrect}>
-                      Correct: <span style={{ color: "#10b981" }}>{q.options[q.correctAnswer]}</span>
-                    </p>
-                  )}
-                  <p style={styles.reviewExplanation}>💡 {q.explanation}</p>
-                </div>
-              );
-            })}
-          </div>
-
-          <div style={styles.resultActions}>
-            <button style={styles.retryBtn} onClick={() => window.location.reload()}>
-              🔄 Retry Quiz
-            </button>
-            <button style={styles.homeBtn} onClick={() => navigate("/")}>
-              🏠 Back to Home
-            </button>
-            <button style={styles.scoresBtn} onClick={() => navigate("/scores")}>
-              🏆 View All Scores
-            </button>
-          </div>
-        </div>
-      </div>
-    );
+    } catch (err) {
+      console.log('📦 Using localStorage (backend not available)')
+      loadFromLocalStorage()
+    } finally {
+      setLoading(false)
+    }
   }
 
-  // ✅ Quiz Taking Screen
-  const question = quizData.questions[currentQuestion];
+  // ✅ Load from localStorage (demo mode)
+  const loadFromLocalStorage = () => {
+    const stored = localStorage.getItem("quizzes")
+    if (stored) {
+      const parsed = JSON.parse(stored)
+      setQuizzes(parsed)
+    } else {
+      // ✅ Demo quizzes (agar koi quiz nahi hai)
+      setQuizzes(getDemoQuizzes())
+    }
+  }
+
+  // ✅ Auto-detect API URL for Local + Codespaces
+  const getApiUrl = () => {
+    if (typeof window !== 'undefined') {
+      const hostname = window.location.hostname
+      if (hostname.includes('github.dev')) {
+        const parts = hostname.split('.')
+        return `https://${parts[0]}-5000.app.github.dev/api`
+      }
+    }
+    return "http://localhost:5000/api"
+  }
+
+  // ✅ Demo quizzes for first-time users
+  const getDemoQuizzes = () => [
+    {
+      id: "1", _id: "1",
+      title: "Python Basics", subject: "python",
+      description: "Test your Python fundamentals with 10 questions",
+      timeLimit: 15, passingScore: 60, status: "active",
+      questions: 10, attempts: 1250, rating: 4.8
+    },
+    {
+      id: "2", _id: "2",
+      title: "Operating System Concepts", subject: "os",
+      description: "Process management, memory, file systems & more",
+      timeLimit: 20, passingScore: 65, status: "active",
+      questions: 15, attempts: 890, rating: 4.6
+    },
+    {
+      id: "3", _id: "3",
+      title: "Computer Networks", subject: "networks",
+      description: "TCP/IP, HTTP, DNS, and network protocols",
+      timeLimit: 18, passingScore: 60, status: "active",
+      questions: 12, attempts: 654, rating: 4.7
+    },
+    {
+      id: "4", _id: "4",
+      title: "Data Structures & Algorithms", subject: "dsa",
+      description: "Arrays, linked lists, trees, sorting & searching",
+      timeLimit: 25, passingScore: 70, status: "active",
+      questions: 20, attempts: 2100, rating: 4.9
+    },
+    {
+      id: "5", _id: "5",
+      title: "Full Stack Development", subject: "fullstack",
+      description: "React, Node.js, MongoDB, and deployment",
+      timeLimit: 30, passingScore: 65, status: "active",
+      questions: 18, attempts: 432, rating: 4.5
+    },
+    {
+      id: "6", _id: "6",
+      title: "Mixed Practice Test", subject: "mixed",
+      description: "Random questions from all subjects",
+      timeLimit: 20, passingScore: 60, status: "active",
+      questions: 15, attempts: 3200, rating: 4.4
+    }
+  ]
+
+  // ✅ Handle start quiz
+  const handleStartQuiz = (quizId) => {
+    // Check if user is logged in
+    const token = localStorage.getItem("token")
+    if (!token) {
+      alert("🔐 Please login first to start a quiz!")
+      navigate("/login")
+      return
+    }
+    navigate(`/quiz/${quizId}`)
+  }
+
+  // ✅ Get subject color
+  const getSubjectColor = (subject) => {
+    const sub = subjects.find(s => s.value === subject)
+    return sub?.color || "#6366f1"
+  }
+
+  // ✅ Get subject label
+  const getSubjectLabel = (subject) => {
+    const sub = subjects.find(s => s.value === subject)
+    return sub?.label || subject
+  }
+
+  if (loading) {
+    return (
+      <div style={styles.loadingContainer}>
+        <div style={styles.spinner}></div>
+        <p style={styles.loadingText}>Loading quizzes...</p>
+      </div>
+    )
+  }
 
   return (
     <div style={styles.container}>
-      {/* Header */}
+      
+      {/* ✅ Header Section */}
       <div style={styles.header}>
-        <h1 style={styles.quizTitle}>{quizData.title}</h1>
-        <div style={styles.timer}>
-          ⏱️ {formatTime(timeLeft)}
+        <div>
+          <h1 style={styles.title}>🎯 Quiz Master</h1>
+          <p style={styles.subtitle}>Test your knowledge with subject-wise quizzes</p>
         </div>
+        {user ? (
+          <div style={styles.userInfo}>
+            <span style={styles.userName}>👋 Hi, {user.name}</span>
+            <button 
+              onClick={() => {
+                localStorage.removeItem("token")
+                localStorage.removeItem("user")
+                setUser(null)
+                navigate("/login")
+              }}
+              style={styles.logoutBtn}
+            >
+              Logout
+            </button>
+          </div>
+        ) : (
+          <div style={styles.authButtons}>
+            <Link to="/login" style={styles.loginBtn}>Sign In</Link>
+            <Link to="/signup" style={styles.signupBtn}>Sign Up</Link>
+          </div>
+        )}
       </div>
 
-      {/* Progress Bar */}
-      <div style={styles.progressContainer}>
-        <div style={styles.progressBar}>
-          <div style={{ ...styles.progressFill, width: `${((currentQuestion + 1) / quizData.questions.length) * 100}%` }} />
-        </div>
-        <span style={styles.progressText}>
-          Question {currentQuestion + 1} of {quizData.questions.length}
-        </span>
+      {/* ✅ Search Bar */}
+      <div style={styles.searchSection}>
+        <input
+          type="text"
+          placeholder="🔍 Search quizzes..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          style={styles.searchInput}
+        />
       </div>
 
-      {/* Question Card */}
-      <div style={styles.questionCard}>
-        <h3 style={styles.questionText}>{question?.question}</h3>
-        
-        <div style={styles.options}>
-          {question?.options.map((option, index) => (
+      {/* ✅ Subject Filters */}
+      <div style={styles.filterSection}>
+        <span style={styles.filterLabel}>Filter by Subject:</span>
+        <div style={styles.filterChips}>
+          {subjects.map(subject => (
             <button
-              key={index}
-              onClick={() => handleAnswer(question.id, index)}
+              key={subject.value}
+              onClick={() => setSelectedSubject(subject.value)}
               style={{
-                ...styles.optionBtn,
-                background: answers[question.id] === index 
-                  ? "linear-gradient(135deg, #2563eb, #3b82f6)" 
-                  : "#ffffff",
-                color: answers[question.id] === index ? "#fff" : "#1e293b",
-                border: answers[question.id] === index 
-                  ? "2px solid #2563eb" 
-                  : "1px solid #e2e8f0"
+                ...styles.filterChip,
+                ...(selectedSubject === subject.value 
+                  ? { ...styles.filterChipActive, background: subject.color }
+                  : {})
               }}
             >
-              {String.fromCharCode(65 + index)}. {option}
+              {subject.label}
             </button>
           ))}
         </div>
       </div>
 
-      {/* Navigation Buttons */}
-      <div style={styles.navButtons}>
-        <button
-          onClick={() => setCurrentQuestion((prev) => Math.max(0, prev - 1))}
-          disabled={currentQuestion === 0}
-          style={{ ...styles.navBtn, opacity: currentQuestion === 0 ? 0.5 : 1 }}
-        >
-          ← Previous
-        </button>
-        
-        {currentQuestion < quizData.questions.length - 1 ? (
-          <button
-            onClick={() => setCurrentQuestion((prev) => prev + 1)}
-            disabled={!answers[question?.id]}
-            style={{ ...styles.navBtn, opacity: !answers[question?.id] ? 0.5 : 1 }}
-          >
-            Next →
-          </button>
-        ) : (
-          <button 
-            onClick={handleSubmit} 
-            disabled={Object.keys(answers).length < quizData.questions.length}
-            style={{ 
-              ...styles.submitBtn, 
-              opacity: Object.keys(answers).length < quizData.questions.length ? 0.6 : 1 
-            }}
-          >
-            ✅ Submit Quiz
-          </button>
-        )}
+      {/* ✅ Results Count */}
+      <div style={styles.resultsInfo}>
+        Showing {filteredQuizzes.length} of {quizzes.filter(q => q.status === "active").length} active quizzes
       </div>
+
+      {/* ✅ Quiz Cards Grid */}
+      {filteredQuizzes.length > 0 ? (
+        <div style={styles.quizGrid}>
+          {filteredQuizzes.map(quiz => (
+            <div key={quiz.id || quiz._id} style={styles.quizCard}>
+              
+              {/* Subject Badge */}
+              <div style={{
+                ...styles.subjectBadge,
+                background: getSubjectColor(quiz.subject)
+              }}>
+                {getSubjectLabel(quiz.subject).split(' ')[0]}
+              </div>
+
+              {/* Quiz Content */}
+              <div style={styles.quizContent}>
+                <h3 style={styles.quizTitle}>{quiz.title}</h3>
+                <p style={styles.quizDesc}>{quiz.description}</p>
+                
+                {/* Quiz Stats */}
+                <div style={styles.quizStats}>
+                  <span style={styles.stat}>⏱️ {quiz.timeLimit} min</span>
+                  <span style={styles.stat}>📝 {quiz.questions || quiz.questions?.length || 10} Qs</span>
+                  <span style={styles.stat}>⭐ {quiz.rating || 4.5}</span>
+                </div>
+
+                {/* Passing Score */}
+                <div style={styles.passingScore}>
+                  Passing Score: <strong>{quiz.passingScore}%</strong>
+                </div>
+
+                {/* Start Button */}
+                <button
+                  onClick={() => handleStartQuiz(quiz.id || quiz._id)}
+                  style={styles.startBtn}
+                >
+                  🚀 Start Quiz
+                </button>
+              </div>
+
+            </div>
+          ))}
+        </div>
+      ) : (
+        /* ✅ Empty State */
+        <div style={styles.emptyState}>
+          <div style={styles.emptyIcon}>📭</div>
+          <h3 style={styles.emptyTitle}>No quizzes found</h3>
+          <p style={styles.emptyDesc}>
+            {searchQuery 
+              ? `No results for "${searchQuery}". Try a different search.`
+              : selectedSubject !== "all"
+                ? `No active quizzes in "${getSubjectLabel(selectedSubject)}".`
+                : "No quizzes available yet. Check back later!"}
+          </p>
+          {(searchQuery || selectedSubject !== "all") && (
+            <button 
+              onClick={() => { setSearchQuery(""); setSelectedSubject("all") }}
+              style={styles.clearFiltersBtn}
+            >
+              Clear Filters
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* ✅ Admin Link (if user is admin) */}
+      {user?.email === "admin@quizapp.com" && (
+        <div style={styles.adminSection}>
+          <Link to="/admin/quizzes" style={styles.adminBtn}>
+            ⚙️ Manage Quizzes (Admin)
+          </Link>
+        </div>
+      )}
+
     </div>
-  );
+  )
 }
 
-/* ====================== 🎨 CLEAN BLUE & WHITE THEME ====================== */
+/* ====================== 🎨 STYLES ====================== */
 const styles = {
-  container: {
-    minHeight: "100vh",
-    background: "#f8fbff",
-    color: "#1e293b",
-    fontFamily: "'Segoe UI', Tahoma, sans-serif",
-    padding: "30px 20px"
+  container: { 
+    width: "100%", maxWidth: "1200px", margin: "0 auto", padding: "20px",
+    background: "#f8fbff", minHeight: "100vh"
   },
   
-  header: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: "25px",
-    padding: "15px 20px",
-    background: "rgba(255, 255, 255, 0.9)",
-    borderRadius: "14px",
-    border: "1px solid #e2e8f0",
-    boxShadow: "0 3px 12px rgba(0, 0, 0, 0.04)"
+  // Header
+  header: { 
+    display: "flex", justifyContent: "space-between", alignItems: "center", 
+    marginBottom: "24px", flexWrap: "wrap", gap: "12px",
+    padding: "16px 20px", background: "#fff", borderRadius: "16px",
+    boxShadow: "0 2px 10px rgba(0,0,0,0.05)"
+  },
+  title: { fontSize: "1.8rem", fontWeight: "800", color: "#1e40af", margin: "0 0 4px 0" },
+  subtitle: { fontSize: "0.95rem", color: "#64748b", margin: 0 },
+  
+  userInfo: { display: "flex", alignItems: "center", gap: "12px" },
+  userName: { fontSize: "0.95rem", color: "#334155", fontWeight: "500" },
+  logoutBtn: { 
+    padding: "8px 16px", background: "#ef4444", color: "#fff", border: "none", 
+    borderRadius: "8px", cursor: "pointer", fontSize: "0.9rem", fontWeight: "500"
   },
   
-  quizTitle: {
-    fontSize: "1.4rem",
-    fontWeight: "700",
-    color: "#1e3a5f",
-    margin: 0
+  authButtons: { display: "flex", gap: "8px" },
+  loginBtn: { 
+    padding: "10px 20px", background: "#fff", color: "#2563eb", 
+    border: "2px solid #2563eb", borderRadius: "8px", textDecoration: "none",
+    fontWeight: "600", fontSize: "0.95rem"
   },
-  
-  timer: {
-    fontSize: "1.1rem",
-    fontWeight: "600",
-    color: "#2563eb",
-    background: "#dbeafe",
-    padding: "8px 16px",
-    borderRadius: "20px"
+  signupBtn: { 
+    padding: "10px 20px", background: "#2563eb", color: "#fff", 
+    border: "none", borderRadius: "8px", textDecoration: "none",
+    fontWeight: "600", fontSize: "0.95rem"
   },
-  
-  progressContainer: {
-    marginBottom: "25px"
-  },
-  
-  progressBar: {
-    height: "8px",
-    background: "#e2e8f0",
-    borderRadius: "4px",
-    overflow: "hidden",
-    marginBottom: "8px"
-  },
-  
-  progressFill: {
-    height: "100%",
-    background: "linear-gradient(90deg, #2563eb, #60a5fa)",
-    borderRadius: "4px",
-    transition: "width 0.3s ease"
-  },
-  
-  progressText: {
-    fontSize: "0.85rem",
-    color: "#64748b",
-    textAlign: "center"
-  },
-  
-  questionCard: {
-    background: "#ffffff",
-    padding: "25px",
-    borderRadius: "16px",
-    border: "1px solid #e2e8f0",
-    boxShadow: "0 4px 15px rgba(0, 0, 0, 0.05)",
-    marginBottom: "25px"
-  },
-  
-  questionText: {
-    fontSize: "1.15rem",
-    fontWeight: "600",
-    color: "#1e3a5f",
-    marginBottom: "20px",
-    lineHeight: "1.4"
-  },
-  
-  options: {
-    display: "flex",
-    flexDirection: "column",
-    gap: "12px"
-  },
-  
-  optionBtn: {
-    padding: "14px 18px",
-    borderRadius: "12px",
-    fontSize: "0.95rem",
-    fontWeight: "500",
-    textAlign: "left",
-    cursor: "pointer",
-    transition: "all 0.2s ease",
-    border: "1px solid #e2e8f0"
-  },
-  
-  navButtons: {
-    display: "flex",
-    justifyContent: "space-between",
-    gap: "12px"
-  },
-  
-  navBtn: {
-    flex: 1,
-    padding: "12px 20px",
-    background: "#ffffff",
-    color: "#2563eb",
-    border: "2px solid #2563eb",
-    borderRadius: "50px",
-    fontSize: "0.9rem",
-    fontWeight: "600",
-    cursor: "pointer",
-    transition: "all 0.2s ease"
-  },
-  
-  submitBtn: {
-    flex: 1,
-    padding: "12px 20px",
-    background: "linear-gradient(135deg, #2563eb, #3b82f6)",
-    color: "#fff",
-    border: "none",
-    borderRadius: "50px",
-    fontSize: "0.9rem",
-    fontWeight: "600",
-    cursor: "pointer",
-    transition: "all 0.2s ease",
-    boxShadow: "0 4px 15px rgba(37, 99, 235, 0.3)"
-  },
-  
-  // Result Screen Styles
-  resultCard: {
-    background: "#ffffff",
-    padding: "35px 30px",
-    borderRadius: "20px",
-    border: "1px solid #e2e8f0",
-    boxShadow: "0 8px 30px rgba(59, 130, 246, 0.15)",
-    maxWidth: "700px",
-    margin: "0 auto",
-    textAlign: "center"
-  },
-  
-  resultTitle: {
-    fontSize: "1.8rem",
-    fontWeight: "700",
-    color: "#1e3a5f",
-    marginBottom: "25px"
-  },
-  
-  scoreDisplay: {
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "center",
-    marginBottom: "30px",
-    padding: "20px",
-    background: "linear-gradient(135deg, #dbeafe, #bfdbfe)",
-    borderRadius: "16px"
-  },
-  
-  scoreValue: {
-    fontSize: "3rem",
-    fontWeight: "800",
-    color: "#2563eb",
-    lineHeight: "1"
-  },
-  
-  scoreText: {
-    fontSize: "1rem",
-    color: "#475569",
-    marginTop: "8px"
-  },
-  
-  reviewSection: {
-    textAlign: "left",
-    marginBottom: "30px",
-    maxHeight: "350px",
-    overflowY: "auto",
-    paddingRight: "10px"
-  },
-  
-  reviewTitle: {
-    fontSize: "1.2rem",
-    fontWeight: "600",
-    color: "#1e3a5f",
-    marginBottom: "15px",
-    paddingBottom: "10px",
-    borderBottom: "2px solid #e2e8f0"
-  },
-  
-  reviewItem: {
-    padding: "15px",
-    marginBottom: "12px",
-    background: "#f8fafc",
-    borderRadius: "10px",
-    border: "1px solid #e2e8f0"
-  },
-  
-  reviewQuestion: {
-    fontSize: "0.95rem",
-    fontWeight: "600",
-    color: "#1e3a5f",
-    marginBottom: "8px"
-  },
-  
-  reviewAnswer: {
-    fontSize: "0.9rem",
-    color: "#475569",
-    marginBottom: "4px"
-  },
-  
-  reviewCorrect: {
-    fontSize: "0.9rem",
-    color: "#475569",
-    marginBottom: "6px"
-  },
-  
-  reviewExplanation: {
-    fontSize: "0.85rem",
-    color: "#64748b",
-    fontStyle: "italic",
-    marginTop: "6px"
-  },
-  
-  resultActions: {
-    display: "flex",
-    flexDirection: "column",
-    gap: "10px"
-  },
-  
-  retryBtn: {
-    padding: "12px 24px",
-    background: "#2563eb",
-    color: "#fff",
-    border: "none",
-    borderRadius: "50px",
-    fontSize: "0.9rem",
-    fontWeight: "600",
-    cursor: "pointer"
-  },
-  
-  homeBtn: {
-    padding: "12px 24px",
-    background: "#ffffff",
-    color: "#2563eb",
-    border: "2px solid #2563eb",
-    borderRadius: "50px",
-    fontSize: "0.9rem",
-    fontWeight: "600",
-    cursor: "pointer"
-  },
-  
-  scoresBtn: {
-    padding: "12px 24px",
-    background: "#64748b",
-    color: "#fff",
-    border: "none",
-    borderRadius: "50px",
-    fontSize: "0.9rem",
-    fontWeight: "600",
-    cursor: "pointer"
-  }
-};
 
-/* ====================== 🎨 HOVER EFFECTS ====================== */
-const addHoverEffects = () => {
+  // Search
+  searchSection: { marginBottom: "20px" },
+  searchInput: {
+    width: "100%", padding: "14px 20px", borderRadius: "12px",
+    border: "2px solid #e2e8f0", fontSize: "1rem", outline: "none",
+    background: "#fff", transition: "border-color 0.2s"
+  },
+
+  // Filters
+  filterSection: { marginBottom: "20px", display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" },
+  filterLabel: { fontSize: "0.9rem", fontWeight: "500", color: "#334155" },
+  filterChips: { display: "flex", gap: "8px", flexWrap: "wrap" },
+  filterChip: {
+    padding: "8px 16px", background: "#f1f5f9", color: "#475569",
+    border: "none", borderRadius: "20px", cursor: "pointer",
+    fontSize: "0.85rem", fontWeight: "500", transition: "all 0.2s"
+  },
+  filterChipActive: { color: "#fff", transform: "scale(1.05)" },
+
+  // Results Info
+  resultsInfo: { 
+    fontSize: "0.9rem", color: "#64748b", marginBottom: "16px",
+    padding: "8px 12px", background: "#f1f5f9", borderRadius: "8px",
+    display: "inline-block"
+  },
+
+  // Quiz Grid
+  quizGrid: { 
+    display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", 
+    gap: "20px", marginBottom: "30px"
+  },
+  quizCard: {
+    background: "#fff", borderRadius: "16px", border: "1px solid #e2e8f0",
+    overflow: "hidden", transition: "transform 0.2s, box-shadow 0.2s",
+    position: "relative"
+  },
+  subjectBadge: {
+    position: "absolute", top: "12px", right: "12px",
+    padding: "4px 12px", borderRadius: "20px", color: "#fff",
+    fontSize: "0.75rem", fontWeight: "600", textTransform: "uppercase"
+  },
+  quizContent: { padding: "20px" },
+  quizTitle: { 
+    fontSize: "1.2rem", fontWeight: "700", color: "#1e293b", 
+    margin: "0 0 8px 0", paddingRight: "80px"
+  },
+  quizDesc: { 
+    fontSize: "0.9rem", color: "#64748b", margin: "0 0 16px 0", 
+    lineHeight: "1.5", display: "-webkit-box", WebkitLineClamp: 2, 
+    WebkitBoxOrient: "vertical", overflow: "hidden"
+  },
+  quizStats: { 
+    display: "flex", gap: "12px", marginBottom: "12px", flexWrap: "wrap" 
+  },
+  stat: { fontSize: "0.85rem", color: "#475569", background: "#f8fafc", padding: "4px 10px", borderRadius: "6px" },
+  passingScore: { 
+    fontSize: "0.85rem", color: "#64748b", marginBottom: "16px",
+    padding: "6px 10px", background: "#fef3c7", borderRadius: "6px", display: "inline-block"
+  },
+  startBtn: {
+    width: "100%", padding: "12px", background: "linear-gradient(135deg, #2563eb, #3b82f6)",
+    color: "#fff", border: "none", borderRadius: "10px", fontSize: "1rem",
+    fontWeight: "600", cursor: "pointer", transition: "transform 0.2s"
+  },
+
+  // Empty State
+  emptyState: { 
+    textAlign: "center", padding: "60px 20px", background: "#fff", 
+    borderRadius: "16px", border: "1px dashed #cbd5e1"
+  },
+  emptyIcon: { fontSize: "3rem", marginBottom: "16px" },
+  emptyTitle: { fontSize: "1.3rem", fontWeight: "600", color: "#1e293b", margin: "0 0 8px 0" },
+  emptyDesc: { fontSize: "0.95rem", color: "#64748b", margin: "0 0 20px 0" },
+  clearFiltersBtn: {
+    padding: "10px 24px", background: "#2563eb", color: "#fff", border: "none",
+    borderRadius: "8px", cursor: "pointer", fontWeight: "500"
+  },
+
+  // Admin Section
+  adminSection: { textAlign: "center", paddingTop: "20px", borderTop: "1px solid #e2e8f0" },
+  adminBtn: {
+    display: "inline-block", padding: "10px 24px", background: "#64748b", 
+    color: "#fff", textDecoration: "none", borderRadius: "8px", fontWeight: "500"
+  },
+
+  // Loading
+  loadingContainer: { 
+    display: "flex", flexDirection: "column", alignItems: "center", 
+    justifyContent: "center", minHeight: "60vh", gap: "16px" 
+  },
+  spinner: {
+    width: "40px", height: "40px", border: "4px solid #e2e8f0",
+    borderTop: "4px solid #2563eb", borderRadius: "50%",
+    animation: "spin 1s linear infinite"
+  },
+  loadingText: { color: "#64748b", fontSize: "1rem" }
+}
+
+/* ====================== 🎨 ANIMATIONS ====================== */
+const addAnimations = () => {
   if (typeof document !== "undefined") {
-    const style = document.createElement("style");
+    const style = document.createElement("style")
     style.textContent = `
-      /* Option Button Hover */
-      button[style*="optionBtn"]:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 6px 15px rgba(37, 99, 235, 0.2) !important;
-        border-color: #2563eb !important;
-      }
+      @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
       
-      /* Nav Button Hover */
-      button[style*="navBtn"]:hover {
-        background: #eff6ff !important;
-        transform: translateY(-2px);
-      }
-      
-      /* Submit Button Hover */
-      button[style*="submitBtn"]:hover {
-        transform: translateY(-3px);
-        box-shadow: 0 8px 25px rgba(37, 99, 235, 0.5) !important;
-      }
-      
-      /* Result Action Buttons Hover */
-      button[style*="retryBtn"]:hover { background: #1d4ed8 !important; }
-      button[style*="homeBtn"]:hover { background: #eff6ff !important; }
-      button[style*="scoresBtn"]:hover { background: #475569 !important; }
-    `;
-    document.head.appendChild(style);
+      input:focus { border-color: #2563eb !important; box-shadow: 0 0 0 3px rgba(37,99,235,0.15) !important; }
+      button[style*="filterChip"]:hover { background: #e2e8f0 !important; }
+      button[style*="filterChipActive"]:hover { transform: scale(1.08) !important; }
+      button[style*="startBtn"]:hover { transform: translateY(-2px); box-shadow: 0 8px 25px rgba(37,99,235,0.4) !important; }
+      div[style*="quizCard"]:hover { transform: translateY(-4px); box-shadow: 0 12px 40px rgba(0,0,0,0.12) !important; }
+      a[style*="loginBtn"]:hover { background: #2563eb !important; color: #fff !important; }
+      a[style*="signupBtn"]:hover { background: #1d4ed8 !important; transform: translateY(-2px); }
+    `
+    document.head.appendChild(style)
   }
-};
-addHoverEffects();
+}
+addAnimations()
