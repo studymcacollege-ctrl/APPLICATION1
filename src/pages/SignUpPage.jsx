@@ -1,4 +1,3 @@
-// src/pages/SignUpPage.jsx
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
@@ -12,32 +11,78 @@ export default function SignUpPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
+  // ✅ Codespaces के लिए API URL detect करें
+  const getApiUrl = () => {
+    if (typeof window !== 'undefined') {
+      const hostname = window.location.hostname;
+      if (hostname.includes('github.dev')) {
+        const parts = hostname.split('.');
+        const codespace = parts[0];
+        return `https://${codespace}-5000.app.github.dev/api`;
+      }
+    }
+    return "http://localhost:5000/api";
+  };
+  
+  const API_URL = getApiUrl();
+  console.log('🔗 API URL:', API_URL);
+
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
     setForm(prev => ({ ...prev, [name]: type === "checkbox" ? checked : value }));
     setError("");
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
-    
-    if (!form.name || !form.email || !form.password || !form.confirmPassword) {
-      setError("Please fill in all fields"); return;
-    }
-    if (form.name.trim().length < 2) { setError("Name must be at least 2 characters"); return; }
-    if (!form.email.includes("@")) { setError("Please enter a valid email"); return; }
-    if (form.password.length < 6) { setError("Password must be at least 6 characters"); return; }
-    if (form.password !== form.confirmPassword) { setError("Passwords do not match"); return; }
-    if (!form.agree) { setError("Please agree to Terms & Privacy"); return; }
+    setLoading(true);
 
-    // Demo: Save to localStorage
-    const users = JSON.parse(localStorage.getItem("quizUsers") || "[]");
-    users.push({ id: Date.now(), name: form.name, email: form.email, password: form.password });
-    localStorage.setItem("quizUsers", JSON.stringify(users));
-    
-    // Redirect to login after successful signup
-    navigate("/login");
+    if (!form.name || !form.email || !form.password || !form.confirmPassword) {
+      setError("Please fill in all fields"); setLoading(false); return;
+    }
+    if (form.name.trim().length < 2) { setError("Name must be at least 2 characters"); setLoading(false); return; }
+    if (!form.email.includes("@")) { setError("Please enter a valid email"); setLoading(false); return; }
+    if (form.password.length < 6) { setError("Password must be at least 6 characters"); setLoading(false); return; }
+    if (form.password !== form.confirmPassword) { setError("Passwords do not match"); setLoading(false); return; }
+    if (!form.agree) { setError("Please agree to Terms & Privacy"); setLoading(false); return; }
+
+    try {
+      console.log('📡 Sending to:', `${API_URL}/signup`);
+      
+      const response = await fetch(`${API_URL}/signup`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: form.name.trim(),
+          email: form.email.trim().toLowerCase(),
+          password: form.password,
+          confirmPassword: form.confirmPassword,
+          agree: form.agree
+        })
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Signup failed");
+      }
+
+      alert("✅ Account created successfully! Please login.");
+      setForm({ name: "", email: "", password: "", confirmPassword: "", agree: false });
+      navigate("/login");
+
+    } catch (err) {
+      console.error('❌ Error:', err);
+      setError(`Cannot connect to server. 
+1. Backend running? (npm run dev)
+2. Port 5000 PUBLIC है? (Ports panel check करें)
+3. API URL: ${API_URL}
+
+Details: ${err.message}`);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -53,31 +98,33 @@ export default function SignUpPage() {
         <form onSubmit={handleSubmit} style={styles.form}>
           <div style={styles.inputGroup}>
             <label style={styles.label}>Full Name</label>
-            <input type="text" name="name" placeholder="John Doe" value={form.name} onChange={handleChange} style={styles.input} required />
+            <input type="text" name="name" placeholder="John Doe" value={form.name} onChange={handleChange} style={styles.input} required disabled={loading} />
           </div>
           <div style={styles.inputGroup}>
             <label style={styles.label}>Email Address</label>
-            <input type="email" name="email" placeholder="you@example.com" value={form.email} onChange={handleChange} style={styles.input} required />
+            <input type="email" name="email" placeholder="you@example.com" value={form.email} onChange={handleChange} style={styles.input} required disabled={loading} />
           </div>
           <div style={styles.inputGroup}>
             <label style={styles.label}>Password</label>
             <div style={styles.passwordWrapper}>
-              <input type={showPassword ? "text" : "password"} name="password" placeholder="••••••••" value={form.password} onChange={handleChange} style={styles.input} required />
-              <button type="button" onClick={() => setShowPassword(!showPassword)} style={styles.toggleBtn}>{showPassword ? "🙈" : "👁️"}</button>
+              <input type={showPassword ? "text" : "password"} name="password" placeholder="••••••••" value={form.password} onChange={handleChange} style={styles.input} required disabled={loading} />
+              <button type="button" onClick={() => setShowPassword(!showPassword)} style={styles.toggleBtn} disabled={loading}>{showPassword ? "🙈" : "👁️"}</button>
             </div>
           </div>
           <div style={styles.inputGroup}>
             <label style={styles.label}>Confirm Password</label>
             <div style={styles.passwordWrapper}>
-              <input type={showConfirmPassword ? "text" : "password"} name="confirmPassword" placeholder="••••••••" value={form.confirmPassword} onChange={handleChange} style={styles.input} required />
-              <button type="button" onClick={() => setShowConfirmPassword(!showConfirmPassword)} style={styles.toggleBtn}>{showConfirmPassword ? "🙈" : "👁️"}</button>
+              <input type={showConfirmPassword ? "text" : "password"} name="confirmPassword" placeholder="••••••••" value={form.confirmPassword} onChange={handleChange} style={styles.input} required disabled={loading} />
+              <button type="button" onClick={() => setShowConfirmPassword(!showConfirmPassword)} style={styles.toggleBtn} disabled={loading}>{showConfirmPassword ? "🙈" : "👁️"}</button>
             </div>
           </div>
           <label style={styles.agreeLabel}>
-            <input type="checkbox" name="agree" checked={form.agree} onChange={handleChange} style={styles.checkbox} required />
+            <input type="checkbox" name="agree" checked={form.agree} onChange={handleChange} style={styles.checkbox} required disabled={loading} />
             <span style={styles.agreeText}>I agree to <a href="/terms" style={styles.link}>Terms</a> & <a href="/privacy" style={styles.link}>Privacy</a></span>
           </label>
-          <button type="submit" style={styles.signupBtn}>🚀 Create Account</button>
+          <button type="submit" style={styles.signupBtn} disabled={loading}>
+            {loading ? "Creating Account..." : "🚀 Create Account"}
+          </button>
         </form>
 
         <div style={styles.divider}>
@@ -87,11 +134,10 @@ export default function SignUpPage() {
         </div>
 
         <div style={styles.socialButtons}>
-          <button style={styles.socialBtn}>🔵 Google</button>
-          <button style={styles.socialBtn}>⬛ GitHub</button>
+          <button style={styles.socialBtn} disabled={loading}>🔵 Google</button>
+          <button style={styles.socialBtn} disabled={loading}>⬛ GitHub</button>
         </div>
 
-        {/* ✅ SIGN IN LINK - YEH HAI IMPORTANT */}
         <p style={styles.loginText}>
           Already have an account?{" "}
           <Link to="/login" style={styles.loginLink}>Sign in →</Link>
@@ -107,7 +153,7 @@ const styles = {
   cardHeader: { marginBottom: "24px" },
   logo: { fontSize: "1.8rem", fontWeight: "800", color: "#1e40af", margin: "0 0 8px 0" },
   subtitle: { fontSize: "0.9rem", color: "#475569", margin: 0 },
-  errorMsg: { background: "#fef2f2", color: "#dc2626", padding: "10px 14px", borderRadius: "10px", fontSize: "0.85rem", marginBottom: "18px", border: "1px solid #fecaca", textAlign: "center" },
+  errorMsg: { background: "#fef2f2", color: "#dc2626", padding: "10px 14px", borderRadius: "10px", fontSize: "0.85rem", marginBottom: "18px", border: "1px solid #fecaca", textAlign: "center", whiteSpace: "pre-line" },
   form: { display: "flex", flexDirection: "column", gap: "16px", textAlign: "left" },
   inputGroup: { display: "flex", flexDirection: "column", gap: "6px" },
   label: { fontSize: "0.85rem", fontWeight: "500", color: "#334155", marginLeft: "2px" },
@@ -135,8 +181,9 @@ const addInteractions = () => {
       input:focus { border-color: #2563eb !important; box-shadow: 0 0 0 3px rgba(37,99,235,0.15) !important; }
       button[style*="toggleBtn"]:hover { opacity: 1 !important; }
       a[style*="link"]:hover, a[style*="loginLink"]:hover { color: #1d4ed8 !important; text-decoration: underline !important; }
-      button[style*="signupBtn"]:hover { transform: translateY(-2px); box-shadow: 0 10px 30px rgba(59,130,246,0.5) !important; }
+      button[style*="signupBtn"]:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 10px 30px rgba(59,130,246,0.5) !important; }
       button[style*="socialBtn"]:hover { background: #eff6ff !important; border-color: #cbd5e1 !important; transform: translateY(-2px); }
+      button:disabled { opacity: 0.7; cursor: not-allowed; }
     `;
     document.head.appendChild(style);
   }

@@ -15,22 +15,62 @@ export default function LoginPage() {
     setError("");
   };
 
-  const handleSubmit = (e) => {
+  // 🔹 UPDATED: Backend API Call wala handleSubmit
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
-    
-    if (!form.email || !form.password) { setError("Please fill in all fields"); return; }
-    if (!form.email.includes("@")) { setError("Please enter a valid email"); return; }
-    if (form.password.length < 6) { setError("Password must be at least 6 characters"); return; }
+    setLoading(true);
 
-    // Demo login logic
-    setTimeout(() => {
-      if (form.email === "admin@quizapp.com" && form.password === "admin123") {
+    // Validation
+    if (!form.email || !form.password) { 
+      setError("Please fill in all fields"); 
+      setLoading(false); 
+      return; 
+    }
+    if (!form.email.includes("@")) { 
+      setError("Please enter a valid email"); 
+      setLoading(false); 
+      return; 
+    }
+    if (form.password.length < 6) { 
+      setError("Password must be at least 6 characters"); 
+      setLoading(false); 
+      return; 
+    }
+
+    try {
+      // 🔹 Backend API Call
+      const response = await fetch("http://localhost:5000/api/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: form.email,
+          password: form.password
+        })
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Login failed");
+      }
+
+      // ✅ Success: Token & user save kare localStorage mein
+      localStorage.setItem("token", data.token);
+      localStorage.setItem("user", JSON.stringify(data.user));
+
+      // Admin ya normal user redirect
+      if (form.email === "admin@quizapp.com") {
         navigate("/admin");
       } else {
         navigate("/");
       }
-    }, 800);
+
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -46,28 +86,57 @@ export default function LoginPage() {
         <form onSubmit={handleSubmit} style={styles.form}>
           <div style={styles.inputGroup}>
             <label style={styles.label}>Email Address</label>
-            <input type="email" name="email" placeholder="you@example.com" value={form.email} onChange={handleChange} style={styles.input} required />
+            <input 
+              type="email" 
+              name="email" 
+              placeholder="you@example.com" 
+              value={form.email} 
+              onChange={handleChange} 
+              style={styles.input} 
+              required 
+            />
           </div>
           <div style={styles.inputGroup}>
             <label style={styles.label}>Password</label>
             <div style={styles.passwordWrapper}>
-              <input type={showPassword ? "text" : "password"} name="password" placeholder="••••••••" value={form.password} onChange={handleChange} style={styles.input} required />
-              <button type="button" onClick={() => setShowPassword(!showPassword)} style={styles.toggleBtn}>{showPassword ? "🙈" : "👁️"}</button>
+              <input 
+                type={showPassword ? "text" : "password"} 
+                name="password" 
+                placeholder="••••••••" 
+                value={form.password} 
+                onChange={handleChange} 
+                style={styles.input} 
+                required 
+              />
+              <button 
+                type="button" 
+                onClick={() => setShowPassword(!showPassword)} 
+                style={styles.toggleBtn}
+              >
+                {showPassword ? "🙈" : "👁️"}
+              </button>
             </div>
           </div>
           
-           {/* Inside LoginForm */}
-<div style={styles.formOptions}>
-  <label style={styles.remember}>
-    <input type="checkbox" name="remember" />
-    <span>Remember me</span>
-  </label>
-  {/* ✅ This link should navigate to /forgot-password */}
-  <Link to="/forgot-password" style={styles.forgotLink}>
-    Forgot password?
-  </Link>
-</div>
-          <button type="submit" style={styles.loginBtn}>🔐 Sign In</button>
+          <div style={styles.formOptions}>
+            <label style={styles.remember}>
+              <input 
+                type="checkbox" 
+                name="remember" 
+                checked={form.remember}
+                onChange={handleChange}
+                style={styles.checkbox} 
+              />
+              <span style={styles.rememberText}>Remember me</span>
+            </label>
+            <Link to="/forgot-password" style={styles.forgotLink}>
+              Forgot password?
+            </Link>
+          </div>
+
+          <button type="submit" style={styles.loginBtn} disabled={loading}>
+            {loading ? "Signing in..." : "🔐 Sign In"}
+          </button>
         </form>
 
         <div style={styles.divider}>
@@ -81,7 +150,6 @@ export default function LoginPage() {
           <button style={styles.socialBtn}>⬛ GitHub</button>
         </div>
 
-        {/* ✅ SIGN UP LINK - YEH HAI IMPORTANT */}
         <p style={styles.signupText}>
           Don't have an account?{" "}
           <Link to="/signup" style={styles.signupLink}>Create one →</Link>
@@ -91,8 +159,9 @@ export default function LoginPage() {
   );
 }
 
+// 💅 Styles (same as before)
 const styles = {
-  pageWrapper: { width: "100%", maxWidth: "900px", margin: "0 auto", padding: "20px 0", display: "flex", justifyContent: "center" },
+  pageWrapper: { width: "100%", maxWidth: "900px", margin: "0 auto", padding: "20px 0", display: "flex", justifyContent: "center", minHeight: "100vh", background: "#f8fbff" },
   loginCard: { width: "100%", maxWidth: "420px", background: "#fff", padding: "35px 30px", borderRadius: "20px", border: "1px solid rgba(59,130,246,0.2)", boxShadow: "0 8px 30px rgba(59,130,246,0.12)", textAlign: "center" },
   cardHeader: { marginBottom: "28px" },
   logo: { fontSize: "1.8rem", fontWeight: "800", color: "#1e40af", margin: "0 0 8px 0" },
@@ -119,6 +188,7 @@ const styles = {
   signupLink: { color: "#2563eb", textDecoration: "none", fontWeight: "600" }
 };
 
+// ✨ Interactive styles
 const addInteractions = () => {
   if (typeof document !== "undefined") {
     const style = document.createElement("style");
@@ -126,8 +196,9 @@ const addInteractions = () => {
       input:focus { border-color: #2563eb !important; box-shadow: 0 0 0 3px rgba(37,99,235,0.15) !important; }
       button[style*="toggleBtn"]:hover { opacity: 1 !important; }
       a[style*="forgotLink"]:hover, a[style*="signupLink"]:hover { color: #1d4ed8 !important; text-decoration: underline !important; }
-      button[style*="loginBtn"]:hover { transform: translateY(-2px); box-shadow: 0 10px 30px rgba(59,130,246,0.5) !important; }
+      button[style*="loginBtn"]:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 10px 30px rgba(59,130,246,0.5) !important; }
       button[style*="socialBtn"]:hover { background: #eff6ff !important; border-color: #cbd5e1 !important; transform: translateY(-2px); }
+      button:disabled { opacity: 0.7; cursor: not-allowed; }
     `;
     document.head.appendChild(style);
   }
